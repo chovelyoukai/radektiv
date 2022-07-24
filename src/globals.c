@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,12 +12,14 @@ EnvGlobals eg;
 static int loadEnvVarI(const char *const name, const int def)
 {
 	char *str = getenv(name);
-	int val;
+	int val = def;
 	if (str)
 	{
 		val = strtol(str, NULL, 10);
 		if (errno)
+		{
 			val = def;
+		}
 	}
 	return val;
 }

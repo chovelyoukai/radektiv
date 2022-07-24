@@ -1,6 +1,7 @@
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 
+#include "inputs.h"
 #include "window.h"
 
 static GLFWwindow *window;
@@ -79,6 +80,26 @@ float getAspectRatio(void)
 float getTime(void)
 {
 	return glfwGetTime();
+}
+
+unsigned int getInputs()
+{
+	unsigned int inputs = 0;
+
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		inputs |= IN_FORWARD;
+
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		inputs |= IN_BACKWARD;
+
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		inputs |= IN_LEFT;
+
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		inputs |= IN_RIGHT;
+
+
+	return inputs;
 }
 
 bool getFocused(void)

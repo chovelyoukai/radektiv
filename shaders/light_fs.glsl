@@ -27,7 +27,6 @@ void main()
 	float lightDist = length(lightDir);
 	float intensity = 1.0f / (constant + linear * lightDist + quad *
 		(lightDist * lightDist));
-	intensity = min(intensity * 1000.0f, 1.0f);
 
 	lightDir = normalize(lightDir);
 	vec3 light = max(dot(lightDir, normal), 0.0f) * lightColor;

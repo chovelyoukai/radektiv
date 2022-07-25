@@ -26,7 +26,23 @@ typedef struct
 	float quad;
 } Light;
 
+typedef struct
+{
+	vec3 eye;
+	vec3 forward;
+	vec3 right;
+	vec3 up;
+	float near;
+	float far;
+	float fov;
+	float tanFov;
+	float factorY;
+	float factorX;
+} Camera;
+
 bool initRenderer(void);
+void initCamera(float near, float far, float fov);
+void updateCamera(vec3 eye, vec3 forward, vec3 right, vec3 up);
 void setupAoBuffer(void);
 void setupGBuffer(void);
 unsigned int generateTexture(GLint internalFormat, int width, int height,
@@ -34,11 +50,13 @@ unsigned int generateTexture(GLint internalFormat, int width, int height,
 RenderObject makeRenderObject(float *verts, unsigned int vertCount);
 void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
 	unsigned int lightCount, mat4x4 view, mat4x4 proj);
+void makeModelMatrix(mat4x4 model, vec3 origin, vec3 rotation, float scale);
 void drawRenderObject(RenderObject ro);
 void drawSSAO(mat4x4 view, mat4x4 proj);
 void blurSSAO(void);
 void drawAmbient(void);
-void drawLights(Light *lights, unsigned int lightCount);
+bool isSphereVisible(vec3 origin, float radius, mat4x4 view, mat4x4 proj);
+void drawLights(Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj);
 bool loadShaderProgram(const char *const vsName, const char *const fsName,
 	unsigned int *prog);
 bool loadShader(const char *const filename, const GLenum type,

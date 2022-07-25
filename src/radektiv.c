@@ -36,16 +36,20 @@ int main(int argc, char **argv)
 	unsigned int numLights;
 	Light *lights = readLights("models/map.lights", &numLights);
 
+	mat4x4 proj;
+	mat4x4_perspective(proj, 1.5f, getAspectRatio(), 0.1f, 2048.0f);
+	initCamera(0.1f, 2048.0f, 1.5f);
+
 	vec3 forward;
 	vec3 right;
-	vec3 up = {0.0f, 1.0f, 0.0f};
+	vec3 up;
 	vec3 eye = {128.0f, 128.0f, 128.0f};
 	float pitch, yaw;
 	pitch = yaw = 0.0f;
 
 	while (!shouldWindowClose())
 	{
-		updateViewAngles(&pitch, &yaw, forward, right);
+		updateViewAngles(&pitch, &yaw, forward, right, up);
 		updateViewPos(forward, right, eye);
 
 		mat4x4 view;
@@ -53,16 +57,7 @@ int main(int argc, char **argv)
 		vec3_add(center, eye, forward);
 		mat4x4_look_at(view, eye, center, up);
 
-		mat4x4 proj;
-		mat4x4_perspective(proj, 1.5f, getAspectRatio(), 0.1f, 2048.0f);
-
-		for (int i = 0; i < numLights; i++)
-		{
-			lights[i].origin[0] += 0.5f * cosf(getTime());
-			lights[i].origin[1] += 1.0f * sinf(getTime());
-			lights[i].origin[2] += 0.5f * sinf(getTime());
-		}
-
+		updateCamera(eye, forward, right, up);
 		drawScene(scene, 1, lights, numLights, view, proj);
 
 		updateWindow();
@@ -77,7 +72,7 @@ int main(int argc, char **argv)
 const float MAX_PITCH = (M_PI / 2.0f) - 0.1f;
 const float YAW_MOD = M_PI * 2.0f;
 
-void updateViewAngles(float *pitch, float *yaw, vec3 forward, vec3 right)
+void updateViewAngles(float *pitch, float *yaw, vec3 forward, vec3 right, vec3 up)
 {
 	// update view angles
 	float xDelta, yDelta;
@@ -97,8 +92,10 @@ void updateViewAngles(float *pitch, float *yaw, vec3 forward, vec3 right)
 	forward[2] = sinf(newYaw) * cosf(newPitch);
 	forward[1] = sinf(newPitch);
 	vec3_norm(forward, forward);
-	vec3 up = {0.0f, 1.0f, 0.0f};
-	vec3_mul_cross(right, forward, up);
+	vec3 absoluteUp = {0.0f, 1.0f, 0.0f};
+	vec3_mul_cross(right, forward, absoluteUp);
+	vec3_norm(right, right);
+	vec3_mul_cross(up, right, forward);
 
 	*yaw = newYaw;
 	*pitch = newPitch;

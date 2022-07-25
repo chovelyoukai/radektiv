@@ -25,16 +25,20 @@ vec3 ssaoKern[SSAO_KERN_SIZE];
 vec3 ssaoNoise[16];
 
 RenderObject screen;
+RenderObject light;
+
+Camera cam;
 
 float squareVerts[] =
 {
 	 // positions        // normals
 	 1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
+	-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
 	 1.0f, -1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
+
 	-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
-	-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
+	 1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
 	-1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
-	 1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f
 };
 
 bool initRenderer(void)
@@ -51,7 +55,7 @@ bool initRenderer(void)
 		&ssaoProg))
 		return false;
 
-	if (!loadShaderProgram("shaders/screen_vs.glsl", "shaders/light_fs.glsl",
+	if (!loadShaderProgram("shaders/light_vs.glsl", "shaders/light_fs.glsl",
 		&lightProg))
 		return false;
 
@@ -68,7 +72,34 @@ bool initRenderer(void)
 
 	screen = makeRenderObject(squareVerts, sizeof squareVerts);
 
+	unsigned int lvc;
+	float *lightVerts = readVecs("models/light.verts", &lvc);
+	unsigned int lnc;
+	float *lightNorms = readVecs("models/light.norms", &lnc);
+	float *lightModel = combineVecs(lightVerts, lightNorms, lvc);
+	free(lightVerts);
+	free(lightNorms);
+	light = makeRenderObject(lightModel, lvc + lnc);
+
 	return true;
+}
+
+void initCamera(float near, float far, float fov)
+{
+	cam.near = near;
+	cam.far = far;
+	cam.fov = fov;
+	cam.tanFov = tanf(fov / 2.0f);
+	cam.factorY = cosf(cam.fov / 2.0f);
+	cam.factorX = cosf(atanf((cam.tanFov * eg.winWidth) / eg.winHeight));
+}
+
+void updateCamera(vec3 eye, vec3 forward, vec3 right, vec3 up)
+{
+	vec3_dup(cam.eye, eye);
+	vec3_dup(cam.forward, forward);
+	vec3_dup(cam.right, right);
+	vec3_dup(cam.up, up);
 }
 
 void setupAoBuffer(void)
@@ -247,7 +278,6 @@ void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glDisable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
 	glBlendEquation(GL_FUNC_ADD);
 	glBlendFunc(GL_ONE, GL_ONE);
@@ -276,8 +306,18 @@ void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
 	// then draw lights
 	if (eg.doLight)
 	{
-		drawLights(lights, lightCount);
+		drawLights(lights, lightCount, view, proj);
 	}
+}
+
+void makeModelMatrix(mat4x4 model, vec3 origin, vec3 rotation, float scale)
+{
+	mat4x4_identity(model);
+	mat4x4_rotate(model, model, 1.0f, 0.0f, 0.0f, rotation[0]);
+	mat4x4_rotate(model, model, 0.0f, 1.0f, 0.0f, rotation[1]);
+	mat4x4_rotate(model, model, 0.0f, 0.0f, 1.0f, rotation[2]);
+	mat4x4_translate_in_place(model, origin[0], origin[1], origin[2]);
+	mat4x4_scale_aniso(model, model, scale, scale, scale);
 }
 
 void drawRenderObject(RenderObject ro)
@@ -285,12 +325,7 @@ void drawRenderObject(RenderObject ro)
 	glBindVertexArray(ro.vao);
 
 	mat4x4 model;
-	mat4x4_identity(model);
-	mat4x4_scale_aniso(model, model, ro.scale, ro.scale, ro.scale);
-	mat4x4_rotate(model, model, 1.0f, 0.0f, 0.0f, ro.rotation[0]);
-	mat4x4_rotate(model, model, 0.0f, 1.0f, 0.0f, ro.rotation[1]);
-	mat4x4_rotate(model, model, 0.0f, 0.0f, 1.0f, ro.rotation[2]);
-	mat4x4_translate_in_place(model, ro.origin[0], ro.origin[1], ro.origin[2]);
+	makeModelMatrix(model, ro.origin, ro.rotation, ro.scale);
 	const float *modelPtr = &model[0][0];
 	glUniformMatrix4fv(glGetUniformLocation(currentProg, "model"),
 		1, GL_FALSE, modelPtr);
@@ -372,15 +407,40 @@ void drawAmbient(void)
 	drawRenderObject(screen);
 }
 
-void drawLights(Light *lights, unsigned int lightCount)
+bool isSphereVisible(vec3 origin, float radius, mat4x4 view, mat4x4 proj)
+{
+	vec3 toPoint;
+	vec3_sub(toPoint, origin, cam.eye);
+
+	float pointZ = vec3_mul_inner(toPoint, cam.forward);
+	if (pointZ > cam.far + radius || pointZ < cam.near - radius)
+		return false;
+
+	float pointY = vec3_mul_inner(toPoint, cam.up);
+	float aux = pointZ * cam.tanFov;
+	float distance = radius / cam.factorY;
+	if (pointY > aux + distance || pointY < -aux - distance)
+		return false;
+
+	float pointX = vec3_mul_inner(toPoint, cam.right);
+	distance = radius / cam.factorX;
+	aux = (aux * eg.winWidth) / eg.winHeight;
+	if (pointX > aux + distance || pointX < -aux - distance)
+		return false;
+
+	return true;
+}
+
+void drawLights(Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj)
 {
 	glUseProgram(lightProg);
 	currentProg = lightProg;
+
+	glCullFace(GL_FRONT);
+
 	glUniform1i(glGetUniformLocation(currentProg, "gPosition"), 0);
 	glUniform1i(glGetUniformLocation(currentProg, "gNormal"), 1);
 	glUniform1i(glGetUniformLocation(currentProg, "gAlbedo"), 2);
-	glUniform2f(glGetUniformLocation(currentProg, "screenSize"),
-		eg.winWidth, eg.winHeight);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gPosition);
@@ -389,18 +449,35 @@ void drawLights(Light *lights, unsigned int lightCount)
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gAlbedo);
 
+	const float *projPtr = &proj[0][0];
+	const float *viewPtr = &view[0][0];
+	glUniformMatrix4fv(glGetUniformLocation(currentProg, "proj"),
+		1, GL_FALSE, projPtr);
+	glUniformMatrix4fv(glGetUniformLocation(currentProg, "view"),
+		1, GL_FALSE, viewPtr);
+	glUniform2f(glGetUniformLocation(currentProg, "screenSize"),
+		eg.winWidth, eg.winHeight);
+
 	for (int n = 0; n < lightCount; n++)
 	{
+		float c = lights[n].constant / 1000.0f;
+		float l = lights[n].linear / 1000.0f;
+		float q = lights[n].quad / 1000.0f;
+		float r = -l + (sqrtf((l * l) - (4 * q * (c - 256.0f / 4.0f))) / (2 * q));
+
+		if (!isSphereVisible(lights[n].origin, r, view, proj))
+			continue;
+
+		glUniform1f(glGetUniformLocation(currentProg, "constant"), c);
+		glUniform1f(glGetUniformLocation(currentProg, "linear"), l);
+		glUniform1f(glGetUniformLocation(currentProg, "quad"), q);
 		glUniform3fv(glGetUniformLocation(currentProg, "lightPos"), 1,
 			lights[n].origin);
-		glUniform1f(glGetUniformLocation(currentProg, "constant"),
-			lights[n].constant);
-		glUniform1f(glGetUniformLocation(currentProg, "linear"),
-			lights[n].linear);
-		glUniform1f(glGetUniformLocation(currentProg, "quad"),
-			lights[n].quad);
 
-		drawRenderObject(screen);
+		light.scale = r;
+		vec3_dup(light.origin, lights[n].origin);
+
+		drawRenderObject(light);
 	}
 }
 

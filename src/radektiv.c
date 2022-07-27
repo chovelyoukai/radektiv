@@ -13,7 +13,8 @@ int main(int argc, char **argv)
 {
 	initEnvGlobals();
 	initWindowSystem();
-	createWindow(eg.winWidth, eg.winHeight, eg.gameName);
+	Window win;
+	createWindow(&win, eg.winWidth, eg.winHeight, eg.gameName);
 
 	Renderer r;
 	if (!initRenderer(&r))
@@ -38,7 +39,7 @@ int main(int argc, char **argv)
 	Light *lights = readLights("models/map.lights", &numLights);
 
 	mat4x4 proj;
-	mat4x4_perspective(proj, 1.5f, getAspectRatio(), 0.1f, 2048.0f);
+	mat4x4_perspective(proj, 1.5f, getAspectRatio(&win), 0.1f, 2048.0f);
 	initCamera(&(r.cam), 0.1f, 2048.0f, 1.5f);
 
 	vec3 forward;
@@ -48,10 +49,12 @@ int main(int argc, char **argv)
 	float pitch, yaw;
 	pitch = yaw = 0.0f;
 
-	while (!shouldWindowClose())
+	while (!shouldWindowClose(&win))
 	{
-		updateViewAngles(&pitch, &yaw, forward, right, up);
-		updateViewPos(forward, right, eye);
+		float xDelta, yDelta;
+		getMousePos(&win, &xDelta, &yDelta);
+		updateViewAngles(xDelta, yDelta, &pitch, &yaw, forward, right, up);
+		updateViewPos(getInputs(&win), forward, right, eye);
 
 		mat4x4 view;
 		vec3 center;
@@ -61,11 +64,11 @@ int main(int argc, char **argv)
 		updateCamera(&(r.cam), eye, forward, right, up);
 		drawScene(&r, scene, 1, lights, numLights, view, proj);
 
-		updateWindow();
+		updateWindow(&win);
 	}
 
 	free(scene[0].verts);
-	destroyWindow();
+	destroyWindow(&win);
 	destroyEnvGlobals();
 	return 0;
 }
@@ -73,12 +76,9 @@ int main(int argc, char **argv)
 const float MAX_PITCH = (M_PI / 2.0f) - 0.1f;
 const float YAW_MOD = M_PI * 2.0f;
 
-void updateViewAngles(float *pitch, float *yaw, vec3 forward, vec3 right, vec3 up)
+void updateViewAngles(float xDelta, float yDelta, float *pitch, float *yaw,
+	vec3 forward, vec3 right, vec3 up)
 {
-	// update view angles
-	float xDelta, yDelta;
-	getMousePos(&xDelta, &yDelta);
-
 	float newYaw = *yaw + xDelta / eg.winWidth;
 	while (newYaw > YAW_MOD) {newYaw -= YAW_MOD;}
 	while (newYaw < 0.0f) {newYaw += YAW_MOD;}
@@ -102,14 +102,12 @@ void updateViewAngles(float *pitch, float *yaw, vec3 forward, vec3 right, vec3 u
 	*pitch = newPitch;
 }
 
-void updateViewPos(vec3 forward, vec3 right, vec3 eye)
+void updateViewPos(unsigned int inputs, vec3 forward, vec3 right, vec3 eye)
 {
 		vec3 moveForward, moveRight;
 		vec3_scale(moveForward, forward, 3.0f);
 		vec3_scale(moveRight, right, 3.0f);
 
-		// update eye pos
-		unsigned int inputs = getInputs();
 		if (inputs & IN_FORWARD)
 			vec3_add(eye, eye, moveForward);
 		if (inputs & IN_BACKWARD)

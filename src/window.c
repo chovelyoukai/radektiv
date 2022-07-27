@@ -1,79 +1,70 @@
-#include <GLFW/glfw3.h>
 #include <stdio.h>
 
 #include "inputs.h"
 #include "window.h"
 
-static GLFWwindow *window;
-
-void initWindowSystem(void)
+bool initWindowSystem(void)
 {
-	window = NULL;
-}
-
-bool createWindow(int width, int height, char *name)
-{
-	if (window)
-	{
-		fprintf(stderr, "Window already exists!\n");
-		return false;
-	}
-
 	if (!glfwInit())
 	{
 		fprintf(stderr, "Could not init GLFW!\n");
 		return false;
 	}
 
+	return true;
+}
+
+bool createWindow(Window *win, int width, int height, char *name)
+{
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	window = glfwCreateWindow(width, height, name, NULL, NULL);
-	if (!window)
+	win->window = glfwCreateWindow(width, height, name, NULL, NULL);
+	if (!win->window)
 	{
 		fprintf(stderr, "Could not open window!\n");
 		glfwTerminate();
 		return false;
 	}
-	glfwMakeContextCurrent(window);
-	captureMouse();
+	glfwMakeContextCurrent(win->window);
+	captureMouse(win);
 	if (glfwRawMouseMotionSupported())
 	{
 		printf("Turning on raw mouse input.\n");
-		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+		glfwSetInputMode(win->window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 	}
 
-	if (glfwGetWindowAttrib(window, GLFW_FOCUSED))
+	if (glfwGetWindowAttrib(win->window, GLFW_FOCUSED))
 	{
 		int w, h;
-		glfwGetWindowSize(window, &w, &h);
-		glfwSetCursorPos(window, w / 2.0f, h / 2.0f);
+		glfwGetWindowSize(win->window, &w, &h);
+		glfwSetCursorPos(win->window, w / 2.0f, h / 2.0f);
 	}
 }
 
-bool shouldWindowClose(void)
+bool shouldWindowClose(Window *win)
 {
-	return glfwWindowShouldClose(window);
+	return glfwWindowShouldClose(win->window);
 }
 
-void updateWindow(void)
+void updateWindow(Window *win)
 {
 	glfwPollEvents();
-	glfwSwapBuffers(window);
+	glfwSwapBuffers(win->window);
 }
 
-void destroyWindow(void)
+void destroyWindow(Window *win)
 {
-	glfwDestroyWindow(window);
+	glfwDestroyWindow(win->window);
 	glfwTerminate();
-	window = NULL;
+	win->window = NULL;
 }
 
-float getAspectRatio(void)
+float getAspectRatio(Window *win)
 {
 	int w, h;
-	glfwGetWindowSize(window, &w, &h);
+	glfwGetWindowSize(win->window, &w, &h);
 	return (float)w / (float)h;
 }
 
@@ -82,62 +73,66 @@ float getTime(void)
 	return glfwGetTime();
 }
 
-unsigned int getInputs()
+bool keyPressed(Window *win, int key)
+{
+	return (glfwGetKey(win->window, key) == GLFW_PRESS);
+}
+
+unsigned int getInputs(Window *win)
 {
 	unsigned int inputs = 0;
 
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	if (keyPressed(win, GLFW_KEY_W))
 		inputs |= IN_FORWARD;
 
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	if (keyPressed(win, GLFW_KEY_S))
 		inputs |= IN_BACKWARD;
 
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	if (keyPressed(win, GLFW_KEY_A))
 		inputs |= IN_LEFT;
 
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	if (keyPressed(win, GLFW_KEY_D))
 		inputs |= IN_RIGHT;
-
 
 	return inputs;
 }
 
-bool getFocused(void)
+bool getFocused(Window *win)
 {
-	return (glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0);
+	return (glfwGetWindowAttrib(win->window, GLFW_FOCUSED) != 0);
 }
 
-void resetMousePos(void)
+void resetMousePos(Window *win)
 {
 	int w, h;
-	glfwGetWindowSize(window, &w, &h);
-	glfwSetCursorPos(window, w / 2.0f, h / 2.0f);
+	glfwGetWindowSize(win->window, &w, &h);
+	glfwSetCursorPos(win->window, w / 2.0f, h / 2.0f);
 }
 
-void captureMouse(void)
+void captureMouse(Window *win)
 {
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetInputMode(win->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
-void releaseMouse(void)
+void releaseMouse(Window *win)
 {
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	glfwSetInputMode(win->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
-void getMousePos(float *x, float *y)
+void getMousePos(Window *win, float *x, float *y)
 {
-	if (glfwGetWindowAttrib(window, GLFW_FOCUSED) == 0)
+	if (glfwGetWindowAttrib(win->window, GLFW_FOCUSED) == 0)
 	{
 		 *x = *y = 0.0f;
 		 return;
 	}
 
 	double xd, yd;
-	glfwGetCursorPos(window, &xd, &yd);
-	resetMousePos();
+	glfwGetCursorPos(win->window, &xd, &yd);
+	resetMousePos(win);
 
 	int w, h;
-	glfwGetWindowSize(window, &w, &h);
+	glfwGetWindowSize(win->window, &w, &h);
 	*x = xd - (w / 2.0f);
 	*y = yd - (h / 2.0f);
 }

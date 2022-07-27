@@ -1,20 +1,27 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
+#include <GLFW/glfw3.h>
 #include <stdbool.h>
 
-void initWindowSystem(void);
-bool createWindow(int width, int height, char *name);
-bool shouldWindowClose(void);
-void updateWindow(void);
-void destroyWindow(void);
-float getAspectRatio(void);
+typedef struct
+{
+	GLFWwindow *window;
+} Window;
+
+bool initWindowSystem(void);
+bool createWindow(Window *win, int width, int height, char *name);
+bool shouldWindowClose(Window *win);
+void updateWindow(Window *win);
+void destroyWindow(Window *win);
+float getAspectRatio(Window *win);
 float getTime(void);
-unsigned int getInputs(void);
-bool getFocused(void);
-void resetMousePos(void);
-void captureMouse(void);
-void releaseMouse(void);
-void getMousePos(float *x, float *y);
+bool keyPressed(Window *win, int key);
+unsigned int getInputs(Window *win);
+bool getFocused(Window *win);
+void resetMousePos(Window *win);
+void captureMouse(Window *win);
+void releaseMouse(Window *win);
+void getMousePos(Window *win, float *x, float *y);
 
 #endif

@@ -7,28 +7,6 @@
 #include "radmath.h"
 #include "render.h"
 
-unsigned int geomProg;
-unsigned int lightProg;
-unsigned int ambientProg;
-unsigned int ssaoProg;
-unsigned int blurProg;
-unsigned int currentProg;
-unsigned int gBuffer;
-unsigned int gPosition, gNormal, gAlbedo;
-unsigned int ssaoBuffer;
-unsigned int ssaoTex, ssaoNoiseTex;
-unsigned int ssaoBlurBuffer;
-unsigned int ssaoBlurTex;
-
-#define SSAO_KERN_SIZE 6
-vec3 ssaoKern[SSAO_KERN_SIZE];
-vec3 ssaoNoise[16];
-
-RenderObject screen;
-RenderObject light;
-
-Camera cam;
-
 float squareVerts[] =
 {
 	 // positions        // normals
@@ -41,36 +19,36 @@ float squareVerts[] =
 	-1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
 };
 
-bool initRenderer(void)
+bool initRenderer(Renderer *r)
 {
 	GLenum glewErr = glewInit();
 	if (GLEW_OK != glewErr)
 		return false;
 
 	if (!loadShaderProgram("shaders/geom_vs.glsl", "shaders/geom_fs.glsl",
-		&geomProg))
+		&(r->Progs.geom)))
 		return false;
 
 	if (!loadShaderProgram("shaders/screen_vs.glsl", "shaders/ssao_fs.glsl",
-		&ssaoProg))
+		&(r->Progs.ssao)))
 		return false;
 
 	if (!loadShaderProgram("shaders/light_vs.glsl", "shaders/light_fs.glsl",
-		&lightProg))
+		&(r->Progs.light)))
 		return false;
 
 	if (!loadShaderProgram("shaders/screen_vs.glsl", "shaders/ambient_fs.glsl",
-		&ambientProg))
+		&(r->Progs.ambient)))
 		return false;
 
 	if (!loadShaderProgram("shaders/screen_vs.glsl", "shaders/blur_fs.glsl",
-		&blurProg))
+		&(r->Progs.blur)))
 		return false;
 
-	setupGBuffer();
-	setupAoBuffer();
+	setupAoBuffer(r);
+	setupGBuffer(r);
 
-	screen = makeRenderObject(squareVerts, sizeof squareVerts);
+	r->Objects.screen = makeRenderObject(squareVerts, sizeof squareVerts);
 
 	unsigned int lvc;
 	float *lightVerts = readVecs("models/light.verts", &lvc);
@@ -79,102 +57,102 @@ bool initRenderer(void)
 	float *lightModel = combineVecs(lightVerts, lightNorms, lvc);
 	free(lightVerts);
 	free(lightNorms);
-	light = makeRenderObject(lightModel, lvc + lnc);
+	r->Objects.light = makeRenderObject(lightModel, lvc + lnc);
 
 	return true;
 }
 
-void initCamera(float near, float far, float fov)
+void initCamera(Camera *cam, float near, float far, float fov)
 {
-	cam.near = near;
-	cam.far = far;
-	cam.fov = fov;
-	cam.tanFov = tanf(fov / 2.0f);
-	cam.factorY = cosf(cam.fov / 2.0f);
-	cam.factorX = cosf(atanf((cam.tanFov * eg.winWidth) / eg.winHeight));
+	cam->near = near;
+	cam->far = far;
+	cam->fov = fov;
+	cam->tanFov = tanf(fov / 2.0f);
+	cam->factorY = cosf(cam->fov / 2.0f);
+	cam->factorX = cosf(atanf((cam->tanFov * eg.winWidth) / eg.winHeight));
 }
 
-void updateCamera(vec3 eye, vec3 forward, vec3 right, vec3 up)
+void updateCamera(Camera *cam, vec3 eye, vec3 forward, vec3 right, vec3 up)
 {
-	vec3_dup(cam.eye, eye);
-	vec3_dup(cam.forward, forward);
-	vec3_dup(cam.right, right);
-	vec3_dup(cam.up, up);
+	vec3_dup(cam->eye, eye);
+	vec3_dup(cam->forward, forward);
+	vec3_dup(cam->right, right);
+	vec3_dup(cam->up, up);
 }
 
-void setupAoBuffer(void)
+void setupAoBuffer(Renderer *r)
 {
 	for (int i = 0; i < SSAO_KERN_SIZE; i++)
 	{
-		ssaoKern[i][0] = randFloat() * 2.0f - 1.0f;
-		ssaoKern[i][1] = randFloat() * 2.0f - 1.0f;
-		ssaoKern[i][2] = randFloat() * 2.0f - 1.0f;
+		r->ssaoKern[i][0] = randFloat() * 2.0f - 1.0f;
+		r->ssaoKern[i][1] = randFloat() * 2.0f - 1.0f;
+		r->ssaoKern[i][2] = randFloat() * 2.0f - 1.0f;
 
-		vec3_norm(ssaoKern[i], ssaoKern[i]);
-		vec3_scale(ssaoKern[i], ssaoKern[i], randFloat());
+		vec3_norm(r->ssaoKern[i], r->ssaoKern[i]);
+		vec3_scale(r->ssaoKern[i], r->ssaoKern[i], randFloat());
 	}
 
 	for (int i = 0; i < 16; i++)
 	{
-		ssaoNoise[i][0] = randFloat() * 2.0f - 1.0f;
-		ssaoNoise[i][1] = randFloat() * 2.0f - 1.0f;
-		ssaoNoise[i][2] = 0.0f;
+		r->ssaoNoise[i][0] = randFloat() * 2.0f - 1.0f;
+		r->ssaoNoise[i][1] = randFloat() * 2.0f - 1.0f;
+		r->ssaoNoise[i][2] = 0.0f;
 	}
 	
-	glGenFramebuffers(1, &ssaoBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBuffer);
-	ssaoTex = generateTexture(GL_DEPTH_COMPONENT, eg.winWidth, eg.winHeight,
+	glGenFramebuffers(1, &(r->FBOs.ssao));
+	glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.ssao);
+	r->Tex.ssao = generateTexture(GL_DEPTH_COMPONENT, eg.winWidth, eg.winHeight,
 		GL_DEPTH_COMPONENT, GL_FLOAT, GL_NEAREST, GL_NEAREST,
 		GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
-		ssaoTex, 0);
+		r->Tex.ssao, 0);
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 
-	glGenFramebuffers(1, &ssaoBlurBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurBuffer);
-	ssaoBlurTex = generateTexture(GL_DEPTH_COMPONENT, eg.winWidth, eg.winHeight,
+	glGenFramebuffers(1, &(r->FBOs.ssaoBlur));
+	glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.ssaoBlur);
+	r->Tex.ssaoBlur = generateTexture(GL_DEPTH_COMPONENT, eg.winWidth, eg.winHeight,
 		GL_DEPTH_COMPONENT, GL_FLOAT, GL_NEAREST, GL_NEAREST,
 		GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
-		ssaoBlurTex, 0);
+		r->Tex.ssaoBlur, 0);
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 
 	// 4x4 noise texture for smoother AO
-	glGenTextures(1, &ssaoNoiseTex);
-	glBindTexture(GL_TEXTURE_2D, ssaoNoiseTex);
+	glGenTextures(1, &(r->Tex.ssaoNoise));
+	glBindTexture(GL_TEXTURE_2D, r->Tex.ssaoNoise);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 4, 4, 0, GL_RGB, GL_FLOAT,
-		&ssaoNoise[0]);
+		&(r->ssaoNoise[0]));
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);  
 }
 
-void setupGBuffer(void)
+void setupGBuffer(Renderer *r)
 {
-	glGenFramebuffers(1, &gBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+	glGenFramebuffers(1, &(r->FBOs.g));
+	glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.g);
 
 	// generate textures for pos, normal, color 
-	gPosition = generateTexture(GL_RGBA16F, eg.winWidth, eg.winHeight,
+	r->Tex.gPosition = generateTexture(GL_RGBA16F, eg.winWidth, eg.winHeight,
 		GL_RGBA, GL_FLOAT, GL_NEAREST, GL_NEAREST, GL_CLAMP_TO_EDGE,
 		GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-		gPosition, 0);
+		r->Tex.gPosition, 0);
 
-	gNormal = generateTexture(GL_RGBA16F, eg.winWidth, eg.winHeight,
+	r->Tex.gNormal = generateTexture(GL_RGBA16F, eg.winWidth, eg.winHeight,
 		GL_RGBA, GL_FLOAT, GL_NEAREST, GL_NEAREST, GL_CLAMP_TO_EDGE,
 		GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D,
-		gNormal, 0);
+		r->Tex.gNormal, 0);
 
-	gAlbedo = generateTexture(GL_RGBA, eg.winWidth, eg.winHeight, GL_RGBA,
+	r->Tex.gAlbedo = generateTexture(GL_RGBA, eg.winWidth, eg.winHeight, GL_RGBA,
 		GL_UNSIGNED_BYTE, GL_NEAREST, GL_NEAREST, GL_CLAMP_TO_EDGE,
 		GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D,
-		gAlbedo, 0);
+		r->Tex.gAlbedo, 0);
 
 	unsigned int attachments[3] = {
 		GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2
@@ -239,14 +217,19 @@ RenderObject makeRenderObject(float *verts, unsigned int size)
 	return ro;
 }
 
-void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
-	unsigned int lightCount, mat4x4 view, mat4x4 proj)
+void useProg(Renderer *r, unsigned int prog)
+{
+	glUseProgram(prog);
+	r->Progs.current = prog;
+}
+
+void drawScene(Renderer *r, RenderObject *scene, unsigned int objects,
+	Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj)
 {
 	// first draw all ROs to g buffer
-	glUseProgram(geomProg);
-	currentProg = geomProg;
+	useProg(r, r->Progs.geom);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.g);
 	glViewport(0, 0, eg.winWidth, eg.winHeight);
 
 	glDepthMask(GL_TRUE);
@@ -260,19 +243,19 @@ void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
 	glDisable(GL_BLEND);
 
 	const float *projPtr = &proj[0][0];
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "proj"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "proj"),
 		1, GL_FALSE, projPtr);
 	const float *viewPtr = &view[0][0];
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "view"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "view"),
 		1, GL_FALSE, viewPtr);
 
 	for (int i = 0; i < objects; i++)
 	{
-		drawRenderObject(scene[i]);
+		drawRenderObject(r, scene[i]);
 	}
 
 	// setup for SSAO
-	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.ssao);
 	glViewport(0, 0, eg.winWidth, eg.winHeight);
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -285,8 +268,8 @@ void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
 	// calculate AO
 	if (eg.doSSAO)
 	{
-		drawSSAO(view, proj);
-		blurSSAO();
+		drawSSAO(r, view, proj);
+		blurSSAO(r);
 	}
 
 	// set up for lighting passes
@@ -301,12 +284,12 @@ void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
 	glDisable(GL_DEPTH_TEST);
 
 	// do ambient lighting
-	drawAmbient();
+	drawAmbient(r);
 
 	// then draw lights
 	if (eg.doLight)
 	{
-		drawLights(lights, lightCount, view, proj);
+		drawLights(r, lights, lightCount, view, proj);
 	}
 }
 
@@ -320,14 +303,14 @@ void makeModelMatrix(mat4x4 model, vec3 origin, vec3 rotation, float scale)
 	mat4x4_scale_aniso(model, model, scale, scale, scale);
 }
 
-void drawRenderObject(RenderObject ro)
+void drawRenderObject(Renderer *r, RenderObject ro)
 {
 	glBindVertexArray(ro.vao);
 
 	mat4x4 model;
 	makeModelMatrix(model, ro.origin, ro.rotation, ro.scale);
 	const float *modelPtr = &model[0][0];
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "model"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "model"),
 		1, GL_FALSE, modelPtr);
 
 	mat4x4 modelInverted;
@@ -335,79 +318,76 @@ void drawRenderObject(RenderObject ro)
 	mat4x4 normal;
 	mat4x4_transpose(normal, modelInverted);
 	const float *normalPtr = &normal[0][0];
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "normal"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "normal"),
 		1, GL_FALSE, normalPtr);
 
 	glDrawArrays(GL_TRIANGLES, 0, ro.vertCount);
 }
 
-void drawSSAO(mat4x4 view, mat4x4 proj)
+void drawSSAO(Renderer *r, mat4x4 view, mat4x4 proj)
 {
 	const float *projPtr = &proj[0][0];
 	const float *viewPtr = &view[0][0];
 
-	glUseProgram(ssaoProg);
-	currentProg = ssaoProg;
-	glUniform1i(glGetUniformLocation(currentProg, "gPosition"), 0);
-	glUniform1i(glGetUniformLocation(currentProg, "ssaoNoise"), 1);
-	glUniform2f(glGetUniformLocation(currentProg, "screenSize"),
+	useProg(r, r->Progs.ssao);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "gPosition"), 0);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "ssaoNoise"), 1);
+	glUniform2f(glGetUniformLocation(r->Progs.current, "screenSize"),
 		eg.winWidth, eg.winHeight);
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "proj"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "proj"),
 		1, GL_FALSE, projPtr);
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "view"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "view"),
 		1, GL_FALSE, viewPtr);
-	const float *ssaoKernPtr = &ssaoKern[0][0];
-	glUniform3fv(glGetUniformLocation(currentProg, "samples"),
+	const float *ssaoKernPtr = &(r->ssaoKern[0][0]);
+	glUniform3fv(glGetUniformLocation(r->Progs.current, "samples"),
 			SSAO_KERN_SIZE, ssaoKernPtr);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.gPosition);
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, ssaoNoiseTex);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.ssaoNoise);
 
-	drawRenderObject(screen);
+	drawRenderObject(r, r->Objects.screen);
 }
 
-void blurSSAO(void)
+void blurSSAO(Renderer *r)
 {
-	glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.ssaoBlur);
 	glViewport(0, 0, eg.winWidth, eg.winHeight);
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glUseProgram(blurProg);
-	currentProg = blurProg;
-	glUniform1i(glGetUniformLocation(currentProg, "ssaoTex"), 0);
-	glUniform2f(glGetUniformLocation(currentProg, "screenSize"),
+	useProg(r, r->Progs.blur);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "ssaoTex"), 0);
+	glUniform2f(glGetUniformLocation(r->Progs.current, "screenSize"),
 		eg.winWidth, eg.winHeight);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, ssaoTex);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.ssao);
 
-	drawRenderObject(screen);
+	drawRenderObject(r, r->Objects.screen);
 }
 
-void drawAmbient(void)
+void drawAmbient(Renderer *r)
 {
-	glUseProgram(ambientProg);
-	currentProg = ambientProg;
-	glUniform1i(glGetUniformLocation(currentProg, "ssaoTex"), 0);
-	glUniform1i(glGetUniformLocation(currentProg, "gAlbedo"), 1);
-	glUniform2f(glGetUniformLocation(currentProg, "screenSize"),
+	useProg(r, r->Progs.ambient);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "ssaoTex"), 0);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "gAlbedo"), 1);
+	glUniform2f(glGetUniformLocation(r->Progs.current, "screenSize"),
 		eg.winWidth, eg.winHeight);
-	glUniform1f(glGetUniformLocation(currentProg, "defaultAo"),
+	glUniform1f(glGetUniformLocation(r->Progs.current, "defaultAo"),
 		eg.doSSAO ? 1.0f : -1.0f);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, ssaoBlurTex);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.ssaoBlur);
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, gAlbedo);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.gAlbedo);
 
-	drawRenderObject(screen);
+	drawRenderObject(r, r->Objects.screen);
 }
 
-bool isSphereVisible(vec3 origin, float radius, mat4x4 view, mat4x4 proj)
+bool isSphereVisible(Camera cam, vec3 origin, float radius, mat4x4 view, mat4x4 proj)
 {
 	vec3 toPoint;
 	vec3_sub(toPoint, origin, cam.eye);
@@ -431,31 +411,30 @@ bool isSphereVisible(vec3 origin, float radius, mat4x4 view, mat4x4 proj)
 	return true;
 }
 
-void drawLights(Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj)
+void drawLights(Renderer *r, Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj)
 {
-	glUseProgram(lightProg);
-	currentProg = lightProg;
+	useProg(r, r->Progs.light);
 
 	glCullFace(GL_FRONT);
 
-	glUniform1i(glGetUniformLocation(currentProg, "gPosition"), 0);
-	glUniform1i(glGetUniformLocation(currentProg, "gNormal"), 1);
-	glUniform1i(glGetUniformLocation(currentProg, "gAlbedo"), 2);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "gPosition"), 0);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "gNormal"), 1);
+	glUniform1i(glGetUniformLocation(r->Progs.current, "gAlbedo"), 2);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.gPosition);
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, gNormal);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.gNormal);
 	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, gAlbedo);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.gAlbedo);
 
 	const float *projPtr = &proj[0][0];
 	const float *viewPtr = &view[0][0];
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "proj"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "proj"),
 		1, GL_FALSE, projPtr);
-	glUniformMatrix4fv(glGetUniformLocation(currentProg, "view"),
+	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "view"),
 		1, GL_FALSE, viewPtr);
-	glUniform2f(glGetUniformLocation(currentProg, "screenSize"),
+	glUniform2f(glGetUniformLocation(r->Progs.current, "screenSize"),
 		eg.winWidth, eg.winHeight);
 
 	for (int n = 0; n < lightCount; n++)
@@ -463,21 +442,21 @@ void drawLights(Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj
 		float c = lights[n].constant / 1000.0f;
 		float l = lights[n].linear / 1000.0f;
 		float q = lights[n].quad / 1000.0f;
-		float r = -l + (sqrtf((l * l) - (4 * q * (c - 256.0f / 4.0f))) / (2 * q));
+		float radius = -l + (sqrtf((l * l) - (4 * q * (c - 256.0f / 4.0f))) / (2 * q));
 
-		if (!isSphereVisible(lights[n].origin, r, view, proj))
+		if (!isSphereVisible(r->cam, lights[n].origin, radius, view, proj))
 			continue;
 
-		glUniform1f(glGetUniformLocation(currentProg, "constant"), c);
-		glUniform1f(glGetUniformLocation(currentProg, "linear"), l);
-		glUniform1f(glGetUniformLocation(currentProg, "quad"), q);
-		glUniform3fv(glGetUniformLocation(currentProg, "lightPos"), 1,
+		glUniform1f(glGetUniformLocation(r->Progs.current, "constant"), c);
+		glUniform1f(glGetUniformLocation(r->Progs.current, "linear"), l);
+		glUniform1f(glGetUniformLocation(r->Progs.current, "quad"), q);
+		glUniform3fv(glGetUniformLocation(r->Progs.current, "lightPos"), 1,
 			lights[n].origin);
 
-		light.scale = r;
-		vec3_dup(light.origin, lights[n].origin);
+		r->Objects.light.scale = radius;
+		vec3_dup(r->Objects.light.origin, lights[n].origin);
 
-		drawRenderObject(light);
+		drawRenderObject(r, r->Objects.light);
 	}
 }
 

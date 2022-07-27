@@ -15,7 +15,8 @@ int main(int argc, char **argv)
 	initWindowSystem();
 	createWindow(eg.winWidth, eg.winHeight, eg.gameName);
 
-	if (!initRenderer())
+	Renderer r;
+	if (!initRenderer(&r))
 		return -1;
 
 	RenderObject scene[1];
@@ -38,7 +39,7 @@ int main(int argc, char **argv)
 
 	mat4x4 proj;
 	mat4x4_perspective(proj, 1.5f, getAspectRatio(), 0.1f, 2048.0f);
-	initCamera(0.1f, 2048.0f, 1.5f);
+	initCamera(&(r.cam), 0.1f, 2048.0f, 1.5f);
 
 	vec3 forward;
 	vec3 right;
@@ -57,8 +58,8 @@ int main(int argc, char **argv)
 		vec3_add(center, eye, forward);
 		mat4x4_look_at(view, eye, center, up);
 
-		updateCamera(eye, forward, right, up);
-		drawScene(scene, 1, lights, numLights, view, proj);
+		updateCamera(&(r.cam), eye, forward, right, up);
+		drawScene(&r, scene, 1, lights, numLights, view, proj);
 
 		updateWindow();
 	}

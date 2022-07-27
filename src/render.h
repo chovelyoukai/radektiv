@@ -7,6 +7,7 @@
 #include "linmath.h"
 
 #define SHADER_SIZE 4096
+#define SSAO_KERN_SIZE 6
 
 typedef struct
 {
@@ -40,23 +41,64 @@ typedef struct
 	float factorX;
 } Camera;
 
-bool initRenderer(void);
-void initCamera(float near, float far, float fov);
-void updateCamera(vec3 eye, vec3 forward, vec3 right, vec3 up);
-void setupAoBuffer(void);
-void setupGBuffer(void);
+typedef struct
+{
+	struct
+	{
+		unsigned int geom;
+		unsigned int light;
+		unsigned int ambient;
+		unsigned int ssao;
+		unsigned int blur;
+		unsigned int current;
+	} Progs;
+
+	struct
+	{
+		unsigned int g;
+		unsigned int ssao;
+		unsigned int ssaoBlur;
+	} FBOs;
+
+	struct
+	{
+		unsigned int gPosition;
+		unsigned int gNormal;
+		unsigned int gAlbedo;
+		unsigned int ssao;
+		unsigned int ssaoNoise;
+		unsigned int ssaoBlur;
+	} Tex;
+
+	struct
+	{
+		RenderObject screen;
+		RenderObject light;
+	} Objects;
+
+	Camera cam;
+	vec3 ssaoKern[SSAO_KERN_SIZE];
+	vec3 ssaoNoise[16];
+} Renderer;
+
+bool initRenderer(Renderer *r);
+void initCamera(Camera *cam, float near, float far, float fov);
+void updateCamera(Camera *cam, vec3 eye, vec3 forward, vec3 right, vec3 up);
+void setupAoBuffer(Renderer *r);
+void setupGBuffer(Renderer *r);
 unsigned int generateTexture(GLint internalFormat, int width, int height,
 	GLenum format, GLenum type, GLint min, GLint mag, GLint wrapS, GLint wrapT);
 RenderObject makeRenderObject(float *verts, unsigned int vertCount);
-void drawScene(RenderObject *scene, unsigned int objects, Light *lights,
-	unsigned int lightCount, mat4x4 view, mat4x4 proj);
+void useProg(Renderer *r, unsigned int prog);
+void drawScene(Renderer *r, RenderObject *scene, unsigned int objects,
+	Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj);
 void makeModelMatrix(mat4x4 model, vec3 origin, vec3 rotation, float scale);
-void drawRenderObject(RenderObject ro);
-void drawSSAO(mat4x4 view, mat4x4 proj);
-void blurSSAO(void);
-void drawAmbient(void);
-bool isSphereVisible(vec3 origin, float radius, mat4x4 view, mat4x4 proj);
-void drawLights(Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj);
+void drawRenderObject(Renderer *r, RenderObject ro);
+void drawSSAO(Renderer *r, mat4x4 view, mat4x4 proj);
+void blurSSAO(Renderer *r);
+void drawAmbient(Renderer *r);
+bool isSphereVisible(Camera cam, vec3 origin, float radius, mat4x4 view, mat4x4 proj);
+void drawLights(Renderer *r, Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj);
 bool loadShaderProgram(const char *const vsName, const char *const fsName,
 	unsigned int *prog);
 bool loadShader(const char *const filename, const GLenum type,

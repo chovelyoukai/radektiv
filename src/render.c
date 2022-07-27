@@ -25,28 +25,33 @@ bool initRenderer(Renderer *r)
 	if (GLEW_OK != glewErr)
 		return false;
 
-	if (!loadShaderProgram("shaders/geom_vs.glsl", "shaders/geom_fs.glsl",
+	if (!loadShaderProgram("shaders/geom_vs.glsl", NULL, "shaders/geom_fs.glsl",
 		&(r->Progs.geom)))
 		return false;
 
-	if (!loadShaderProgram("shaders/screen_vs.glsl", "shaders/ssao_fs.glsl",
+	if (!loadShaderProgram("shaders/screen_vs.glsl", NULL, "shaders/ssao_fs.glsl",
 		&(r->Progs.ssao)))
 		return false;
 
-	if (!loadShaderProgram("shaders/light_vs.glsl", "shaders/light_fs.glsl",
+	if (!loadShaderProgram("shaders/light_vs.glsl", NULL, "shaders/light_fs.glsl",
 		&(r->Progs.light)))
 		return false;
 
-	if (!loadShaderProgram("shaders/screen_vs.glsl", "shaders/ambient_fs.glsl",
+	if (!loadShaderProgram("shaders/screen_vs.glsl", NULL, "shaders/ambient_fs.glsl",
 		&(r->Progs.ambient)))
 		return false;
 
-	if (!loadShaderProgram("shaders/screen_vs.glsl", "shaders/blur_fs.glsl",
+	if (!loadShaderProgram("shaders/screen_vs.glsl", NULL, "shaders/blur_fs.glsl",
 		&(r->Progs.blur)))
+		return false;
+
+	if (!loadShaderProgram("shaders/shadow_vs.glsl", "shaders/shadow_gs.glsl",
+		"shaders/shadow_fs.glsl", &(r->Progs.shadow)))
 		return false;
 
 	setupAoBuffer(r);
 	setupGBuffer(r);
+	setupShadowBuffer(r);
 
 	r->Objects.screen = makeRenderObject(squareVerts, sizeof squareVerts);
 
@@ -173,6 +178,32 @@ void setupGBuffer(Renderer *r)
 		fprintf(stderr, "FBO incomplete.\n");
 }
 
+static const int SHADOW_WIDTH = 1024;
+static const int SHADOW_HEIGHT = 1024;
+
+void setupShadowBuffer(Renderer *r)
+{
+	glGenFramebuffers(1, &(r->FBOs.shadow));
+	glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.shadow);
+
+	glGenTextures(1, &(r->Tex.shadowMap));
+	glBindTexture(GL_TEXTURE_CUBE_MAP, r->Tex.shadowMap);
+	for (unsigned int i = 0; i < 6; i++)
+	{
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT,
+			SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	}
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, r->Tex.shadowMap, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+}
+
 unsigned int generateTexture(GLint internalFormat, int width, int height,
 	GLenum format, GLenum type, GLint min, GLint mag, GLint wrapS, GLint wrapT)
 {
@@ -289,7 +320,7 @@ void drawScene(Renderer *r, RenderObject *scene, unsigned int objects,
 	// then draw lights
 	if (eg.doLight)
 	{
-		drawLights(r, lights, lightCount, view, proj);
+		drawLights(r, scene, objects, lights, lightCount, view, proj);
 	}
 }
 
@@ -411,32 +442,13 @@ bool isSphereVisible(Camera cam, vec3 origin, float radius, mat4x4 view, mat4x4 
 	return true;
 }
 
-void drawLights(Renderer *r, Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj)
+void drawLights(Renderer *r, RenderObject *scene, unsigned int objects,
+	Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj)
 {
-	useProg(r, r->Progs.light);
-
-	glCullFace(GL_FRONT);
-
-	glUniform1i(glGetUniformLocation(r->Progs.current, "gPosition"), 0);
-	glUniform1i(glGetUniformLocation(r->Progs.current, "gNormal"), 1);
-	glUniform1i(glGetUniformLocation(r->Progs.current, "gAlbedo"), 2);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, r->Tex.gPosition);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, r->Tex.gNormal);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, r->Tex.gAlbedo);
-
 	const float *projPtr = &proj[0][0];
 	const float *viewPtr = &view[0][0];
-	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "proj"),
-		1, GL_FALSE, projPtr);
-	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "view"),
-		1, GL_FALSE, viewPtr);
-	glUniform2f(glGetUniformLocation(r->Progs.current, "screenSize"),
-		eg.winWidth, eg.winHeight);
 
+	glCullFace(GL_FRONT);
 	for (int n = 0; n < lightCount; n++)
 	{
 		float c = lights[n].constant / 1000.0f;
@@ -447,9 +459,89 @@ void drawLights(Renderer *r, Light *lights, unsigned int lightCount, mat4x4 view
 		if (!isSphereVisible(r->cam, lights[n].origin, radius, view, proj))
 			continue;
 
+		// first draw shadows
+		glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.shadow);
+		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+
+		glDepthMask(GL_TRUE);
+
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+		glEnable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+
+		useProg(r, r->Progs.shadow);
+
+		mat4x4 lightView[6];
+		const float *lightViewPtr = &lightView[0][0][0];
+		vec3 center;
+		vec3_add(center, lights[n].origin, (vec3){1.0f, 0.0f, 0.0f});
+		mat4x4_look_at(lightView[0], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+		vec3_add(center, lights[n].origin, (vec3){-1.0f, 0.0f, 0.0f});
+		mat4x4_look_at(lightView[1], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+		vec3_add(center, lights[n].origin, (vec3){0.0f, 1.0f, 0.0f});
+		mat4x4_look_at(lightView[2], lights[n].origin, center, (vec3){0.0f, 0.0f, 1.0f});
+		vec3_add(center, lights[n].origin, (vec3){0.0f, -1.0f, 0.0f});
+		mat4x4_look_at(lightView[3], lights[n].origin, center, (vec3){0.0f, 0.0f, -1.0f});
+		vec3_add(center, lights[n].origin, (vec3){0.0f, 0.0f, 1.0f});
+		mat4x4_look_at(lightView[4], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+		vec3_add(center, lights[n].origin, (vec3){0.0f, 0.0f, -1.0f});
+		mat4x4_look_at(lightView[5], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+
+		mat4x4 lightProj;
+		const float *lightProjPtr = &lightProj[0][0];
+		mat4x4_perspective(lightProj, M_PI / 2.0f, 1.0f, r->cam.near, r->cam.far);
+
+		glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "lightView"),
+			6, GL_FALSE, lightViewPtr);
+		glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "lightProj"),
+			1, GL_FALSE, lightProjPtr);
+		glUniform3fv(glGetUniformLocation(r->Progs.current, "lightPos"), 1,
+			lights[n].origin);
+		glUniform1f(glGetUniformLocation(r->Progs.current, "far"), r->cam.far);
+
+		for (int i = 0; i < objects; i++)
+		{
+			drawRenderObject(r, scene[i]);
+		}
+
+		// then draw lights
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, eg.winWidth, eg.winHeight);
+
+		glDepthMask(GL_FALSE);
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendEquation(GL_FUNC_ADD);
+		glBlendFunc(GL_ONE, GL_ONE);
+
+		useProg(r, r->Progs.light);
+
+		glUniform1i(glGetUniformLocation(r->Progs.current, "gPosition"), 0);
+		glUniform1i(glGetUniformLocation(r->Progs.current, "gNormal"), 1);
+		glUniform1i(glGetUniformLocation(r->Progs.current, "gAlbedo"), 2);
+		glUniform1i(glGetUniformLocation(r->Progs.current, "shadowMap"), 3);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, r->Tex.gPosition);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, r->Tex.gNormal);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, r->Tex.gAlbedo);
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, r->Tex.shadowMap);
+
+		glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "proj"),
+			1, GL_FALSE, projPtr);
+		glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "view"),
+			1, GL_FALSE, viewPtr);
+		glUniform2f(glGetUniformLocation(r->Progs.current, "screenSize"),
+			eg.winWidth, eg.winHeight);
+
 		glUniform1f(glGetUniformLocation(r->Progs.current, "constant"), c);
 		glUniform1f(glGetUniformLocation(r->Progs.current, "linear"), l);
 		glUniform1f(glGetUniformLocation(r->Progs.current, "quad"), q);
+		glUniform1f(glGetUniformLocation(r->Progs.current, "far"), r->cam.far);
 		glUniform3fv(glGetUniformLocation(r->Progs.current, "lightPos"), 1,
 			lights[n].origin);
 
@@ -460,23 +552,41 @@ void drawLights(Renderer *r, Light *lights, unsigned int lightCount, mat4x4 view
 	}
 }
 
-bool loadShaderProgram(const char *const vsName, const char *const fsName,
-	unsigned int *prog)
+bool loadShaderProgram(const char *const vsName, const char *const gsName,
+	const char *const fsName, unsigned int *prog)
 {
-	unsigned int vs, fs;
+	unsigned int vs, gs, fs;
 	if (!loadShader(vsName, GL_VERTEX_SHADER, &vs) ||
 		!loadShader(fsName, GL_FRAGMENT_SHADER, &fs))
 	{
 		return false;
 	}
 
+	if (gsName)
+	{
+		if (!loadShader(gsName, GL_GEOMETRY_SHADER, &gs))
+			return false;
+	}
+	else
+	{
+		gs = 0;
+	}
+
 	*prog = glCreateProgram();
 	glAttachShader(*prog, vs);
 	glAttachShader(*prog, fs);
+	if (gs)
+	{
+		glAttachShader(*prog, gs);
+	}
 	glLinkProgram(*prog);
 
 	glDeleteShader(vs);
 	glDeleteShader(fs);
+	if (gs)
+	{
+		glDeleteShader(gs);
+	}
 
 	int success;
 	glGetProgramiv(*prog, GL_LINK_STATUS, &success);

@@ -83,8 +83,8 @@ Light *readLights(const char *const filename, unsigned int *size)
 		lights[i].origin[1] = z;
 		lights[i].origin[2] = -y;
 		lights[i].constant  = 1.0f;
-		lights[i].linear    = 0.7f;
-		lights[i].quad      = 1.8f;
+		lights[i].linear    = 0.5f;
+		lights[i].quad      = 0.5f;
 	}
 
 	*size = numLights;

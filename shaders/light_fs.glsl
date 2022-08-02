@@ -31,10 +31,11 @@ float shadowAmount(vec3 position, vec3 normal)
 	float radius = (currentDepth - closestDepth) * 1.5f / closestDepth;
 
 	float shadow = 0.0f;
+	float bias = max(0.2 * (1.0 - dot(normal, lightVec)), 0.05);
 	for (int i = 0; i < 14; i++)
 	{
 		float depth = far * texture(shadowMap, lightVec + sampleOffsets[i] * radius).r;
-		shadow += currentDepth > depth ? 1.0f : 0.0f;
+		shadow += currentDepth - bias > depth ? 1.0f : 0.0f;
 	}
 	shadow /= 14.0f;
 	return shadow;

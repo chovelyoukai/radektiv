@@ -7,7 +7,7 @@ uniform sampler2D gAlbedo;
 uniform vec2 screenSize;
 uniform float defaultAo;
 
-const float ambient = 0.2f;
+const float ambient = 0.4f;
 
 void main()
 {

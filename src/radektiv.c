@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "bsp.h"
 #include "globals.h"
 #include "inputs.h"
 #include "model.h"
@@ -27,6 +28,10 @@ int main(int argc, char **argv)
 
 	RenderObject scene[1];
 
+	BSPLevel *level = loadMap(lts, "maps/q3dm0.bsp");
+	scene[0] = makeRenderObjectBSP(level);
+
+/*
 	unsigned int vertSize;
 	float *mapVerts = readVecs("models/map.verts", &vertSize, sts);
 	unsigned int normSize;
@@ -37,6 +42,7 @@ int main(int argc, char **argv)
 	}
 	float *mapModel = combineVecs(mapVerts, mapNorms, vertSize, lts);
 	scene[0] = makeRenderObject(mapModel, vertSize + normSize);
+*/
 
 	unsigned int numLights;
 	Light *lights = readLights("models/map.lights", &numLights, lts);

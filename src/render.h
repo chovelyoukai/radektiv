@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #include "alloc.h"
+#include "bspfile.h"
 #include "linmath.h"
 
 #define SHADER_SIZE 4096
@@ -14,10 +15,12 @@ typedef struct
 {
 	float *verts;
 	unsigned int vertCount;
+	unsigned int indexCount;
 	unsigned int vao;
 	vec3 origin;
 	vec3 rotation;
 	float scale;
+	bool indexed;
 } RenderObject;
 
 typedef struct
@@ -96,6 +99,7 @@ void setupShadowBuffer(Renderer *r);
 unsigned int generateTexture(GLint internalFormat, int width, int height,
 	GLenum format, GLenum type, GLint min, GLint mag, GLint wrapS, GLint wrapT);
 RenderObject makeRenderObject(float *verts, unsigned int vertCount);
+RenderObject makeRenderObjectBSP(BSPLevel *level);
 void useProg(Renderer *r, unsigned int prog);
 void drawScene(Renderer *r, RenderObject *scene, unsigned int objects,
 	Light *lights, unsigned int lightCount, mat4x4 view, mat4x4 proj);

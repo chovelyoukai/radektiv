@@ -240,6 +240,56 @@ RenderObject makeRenderObject(float *verts, unsigned int size)
 		(void *)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
+	ro.indexed = false;
+	ro.origin[0] = ro.origin[1] = ro.origin[2] = 0.0f;
+	ro.rotation[0] = ro.rotation[1] = ro.rotation[2] = 0.0f;
+	ro.scale = 1.0f;
+
+	return ro;
+}
+
+RenderObject makeRenderObjectBSP(BSPLevel *level)
+{
+	unsigned int numVerts = level->header->lumps[LUMP_VERTS].length /
+		sizeof(BSPVert);
+//	unsigned int numIndices = level->header->lumps[LUMP_INDICES].length /
+//		sizeof(BSPIndex);
+	unsigned int numIndices = level->realIndexCount;
+
+	RenderObject ro;
+	ro.verts = NULL;
+	ro.vertCount = numVerts;
+	ro.indexCount = numIndices;
+
+	glGenVertexArrays(1, &(ro.vao));
+	glBindVertexArray(ro.vao);
+
+	unsigned int vbo;
+	glGenBuffers(1, &vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, numVerts * sizeof(BSPVert), level->verts,
+		GL_STATIC_DRAW);
+
+	unsigned int stride = sizeof(BSPVert);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void *)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void *)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void *)(5 * sizeof(float)));
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, (void *)(7 * sizeof(float)));
+	glEnableVertexAttribArray(3);
+	glVertexAttribPointer(4, 4, GL_BYTE, GL_FALSE, stride, (void *)(10 * sizeof(float)));
+	glEnableVertexAttribArray(4);
+
+	unsigned int ebo;
+	glGenBuffers(1, &ebo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * sizeof(BSPIndex), level->realIndices,
+		GL_STATIC_DRAW);
+
+	ro.indexed = true;
 	ro.origin[0] = ro.origin[1] = ro.origin[2] = 0.0f;
 	ro.rotation[0] = ro.rotation[1] = ro.rotation[2] = 0.0f;
 	ro.scale = 1.0f;
@@ -268,7 +318,7 @@ void drawScene(Renderer *r, RenderObject *scene, unsigned int objects,
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
+	glDisable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 	glDisable(GL_BLEND);
 
@@ -351,7 +401,14 @@ void drawRenderObject(Renderer *r, RenderObject ro)
 	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "normal"),
 		1, GL_FALSE, normalPtr);
 
-	glDrawArrays(GL_TRIANGLES, 0, ro.vertCount);
+	if (ro.indexed)
+	{
+		glDrawElements(GL_TRIANGLES, ro.indexCount, GL_UNSIGNED_INT, NULL);
+	}
+	else
+	{
+		glDrawArrays(GL_TRIANGLES, 0, ro.vertCount);
+	}
 }
 
 void drawSSAO(Renderer *r, mat4x4 view, mat4x4 proj)
@@ -447,6 +504,7 @@ void drawLights(Renderer *r, RenderObject *scene, unsigned int objects,
 	const float *projPtr = &proj[0][0];
 	const float *viewPtr = &view[0][0];
 
+	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
 
 	// if we aren't going to draw shadows, just set this up once

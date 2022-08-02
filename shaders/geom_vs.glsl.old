@@ -1,10 +1,7 @@
 #version 330 core
 
 layout(location = 0) in vec3 vpos;
-layout(location = 1) in vec2 lmuv;
-layout(location = 2) in vec2 texuv;
-layout(location = 3) in vec3 vnorm;
-layout(location = 4) in uvec4 vclr;
+layout(location = 1) in vec3 vnorm;
 
 out vec4 fs_normal;
 out vec4 fs_worldCoords;

@@ -19,7 +19,7 @@ float squareVerts[] =
 	-1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
 };
 
-bool initRenderer(Renderer *r)
+bool initRenderer(Renderer *r, Stack *s)
 {
 	GLenum glewErr = glewInit();
 	if (GLEW_OK != glewErr)
@@ -55,13 +55,12 @@ bool initRenderer(Renderer *r)
 
 	r->Objects.screen = makeRenderObject(squareVerts, sizeof squareVerts);
 
+	r->s = s;
 	unsigned int lvc;
-	float *lightVerts = readVecs("models/light.verts", &lvc);
+	float *lightVerts = readVecs("models/light.verts", &lvc, s);
 	unsigned int lnc;
-	float *lightNorms = readVecs("models/light.norms", &lnc);
-	float *lightModel = combineVecs(lightVerts, lightNorms, lvc);
-	free(lightVerts);
-	free(lightNorms);
+	float *lightNorms = readVecs("models/light.norms", &lnc, s);
+	float *lightModel = combineVecs(lightVerts, lightNorms, lvc, s);
 	r->Objects.light = makeRenderObject(lightModel, lvc + lnc);
 
 	return true;

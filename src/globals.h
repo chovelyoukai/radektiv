@@ -1,6 +1,8 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#include "alloc.h"
+
 typedef struct
 {
 	int winWidth;
@@ -13,7 +15,6 @@ typedef struct
 
 extern EnvGlobals eg;
 
-void initEnvGlobals(void);
-void destroyEnvGlobals(void);
+void initEnvGlobals(Stack *s);
 
 #endif

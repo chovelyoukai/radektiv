@@ -14,7 +14,12 @@ bool initWindowSystem(void)
 	return true;
 }
 
-bool createWindow(Window *win, int width, int height, char *name)
+void shutdownWindowSystem(void)
+{
+	glfwTerminate();
+}
+
+bool makeWindow(Window *win, int width, int height, char *name)
 {
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);

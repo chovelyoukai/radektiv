@@ -11,32 +11,35 @@
 
 int main(int argc, char **argv)
 {
-	initEnvGlobals();
+	// long term and short term stacks;
+	Stack *lts, *sts;
+	lts = makeStack(DEFAULT_STACK_SIZE);
+	sts = makeStack(DEFAULT_STACK_SIZE);
+
+	initEnvGlobals(lts);
 	initWindowSystem();
 	Window win;
-	createWindow(&win, eg.winWidth, eg.winHeight, eg.gameName);
+	makeWindow(&win, eg.winWidth, eg.winHeight, eg.gameName);
 
 	Renderer r;
-	if (!initRenderer(&r))
+	if (!initRenderer(&r, lts))
 		return -1;
 
 	RenderObject scene[1];
 
 	unsigned int vertSize;
-	float *mapVerts = readVecs("models/map.verts", &vertSize);
+	float *mapVerts = readVecs("models/map.verts", &vertSize, sts);
 	unsigned int normSize;
-	float *mapNorms = readVecs("models/map.norms", &normSize);
+	float *mapNorms = readVecs("models/map.norms", &normSize, sts);
 	if (!mapVerts || !mapNorms)
 	{
 		return -1;
 	}
-	float *mapModel = combineVecs(mapVerts, mapNorms, vertSize);
-	free(mapVerts);
-	free(mapNorms);
+	float *mapModel = combineVecs(mapVerts, mapNorms, vertSize, lts);
 	scene[0] = makeRenderObject(mapModel, vertSize + normSize);
 
 	unsigned int numLights;
-	Light *lights = readLights("models/map.lights", &numLights);
+	Light *lights = readLights("models/map.lights", &numLights, lts);
 
 	mat4x4 proj;
 	mat4x4_perspective(proj, 1.5f, getAspectRatio(&win), 0.1f, 2048.0f);
@@ -64,12 +67,14 @@ int main(int argc, char **argv)
 		updateCamera(&(r.cam), eye, forward, right, up);
 		drawScene(&r, scene, 1, lights, numLights, view, proj);
 
+		stclear(sts);
 		updateWindow(&win);
 	}
 
-	free(scene[0].verts);
 	destroyWindow(&win);
-	destroyEnvGlobals();
+	shutdownWindowSystem();
+	destroyStack(sts);
+	destroyStack(lts);
 	return 0;
 }
 

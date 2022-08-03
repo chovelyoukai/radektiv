@@ -4,6 +4,7 @@
 #include <GL/glew.h>
 #include <stdbool.h>
 
+#include "alloc.h"
 #include "linmath.h"
 
 #define SHADER_SIZE 4096
@@ -82,9 +83,11 @@ typedef struct
 	Camera cam;
 	vec3 ssaoKern[SSAO_KERN_SIZE];
 	vec3 ssaoNoise[16];
+
+	Stack *s;
 } Renderer;
 
-bool initRenderer(Renderer *r);
+bool initRenderer(Renderer *r, Stack *s);
 void initCamera(Camera *cam, float near, float far, float fov);
 void updateCamera(Camera *cam, vec3 eye, vec3 forward, vec3 right, vec3 up);
 void setupAoBuffer(Renderer *r);

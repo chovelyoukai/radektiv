@@ -6,7 +6,7 @@
 
 static const int LINE_LEN = 64;
 
-float *readVecs(const char *const filename, unsigned int *size)
+float *readVecs(const char *const filename, unsigned int *size, Stack *s)
 {
 	FILE *filePtr = fopen(filename, "r");
 	if (!filePtr)
@@ -16,7 +16,7 @@ float *readVecs(const char *const filename, unsigned int *size)
 	fgets(line, LINE_LEN, filePtr);
 	unsigned int numVecs = strtol(line, NULL, 10);
 
-	float *vecs = malloc(sizeof(float) * numVecs);
+	float *vecs = stalloc(s, sizeof(float) * numVecs);
 	if (!vecs)
 		return NULL;
 
@@ -36,9 +36,9 @@ float *readVecs(const char *const filename, unsigned int *size)
 }
 
 float *combineVecs(const float *const v1, const float *const v2,
-	const unsigned int size)
+	const unsigned int size, Stack *s)
 {
-	float *combined = malloc(sizeof(float) * 2 * size);
+	float *combined = stalloc(s, sizeof(float) * 2 * size);
 	if (!combined)
 		return NULL;
 
@@ -61,7 +61,7 @@ float *combineVecs(const float *const v1, const float *const v2,
 	return combined;
 }
 
-Light *readLights(const char *const filename, unsigned int *size)
+Light *readLights(const char *const filename, unsigned int *size, Stack *s)
 {
 	FILE *filePtr = fopen(filename, "r");
 	if (!filePtr)
@@ -71,7 +71,7 @@ Light *readLights(const char *const filename, unsigned int *size)
 	fgets(line, LINE_LEN, filePtr);
 	unsigned int numLights = strtol(line, NULL, 10);
 
-	Light *lights = malloc(sizeof(Light) * numLights);
+	Light *lights = stalloc(s, sizeof(Light) * numLights);
 	if (!lights)
 		return NULL;
 

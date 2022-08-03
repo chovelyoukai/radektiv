@@ -10,7 +10,8 @@ typedef struct
 } Window;
 
 bool initWindowSystem(void);
-bool createWindow(Window *win, int width, int height, char *name);
+void shutdownWindowSystem(void);
+bool makeWindow(Window *win, int width, int height, char *name);
 bool shouldWindowClose(Window *win);
 void updateWindow(Window *win);
 void destroyWindow(Window *win);

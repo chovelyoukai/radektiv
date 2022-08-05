@@ -4,7 +4,7 @@ uniform sampler2D gPosition;
 uniform sampler2D ssaoNoise;
 
 #define SSAO_KERN_SIZE 6
-#define RADIUS 32.0f
+#define RADIUS 3.0f
 #define BIAS 0.025f
 
 uniform vec2 screenSize;
@@ -35,7 +35,7 @@ float calculateAO(vec2 uv)
 			RADIUS / abs(position.z - sampleDepth));
 		occlusion += step(0.0f, sampleDepth - (samplePos.z + BIAS)) * rangeCheck;
 	}
-	occlusion = 1.2f - (occlusion / SSAO_KERN_SIZE);
+	occlusion = 1.1f - (occlusion / SSAO_KERN_SIZE);
 	return occlusion;
 }
 

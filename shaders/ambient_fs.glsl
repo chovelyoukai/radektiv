@@ -7,7 +7,8 @@ uniform sampler2D gAlbedo;
 uniform vec2 screenSize;
 uniform float defaultAo;
 
-const float ambient = 0.4f;
+const float ambient = 0.25f;
+const float maxAo = 0.7f;
 
 void main()
 {
@@ -17,6 +18,7 @@ void main()
 	vec3 albedo = texture(gAlbedo, uv).xyz;
 
 	float ao = abs(min(texture(ssaoTex, uv).r, defaultAo));
+	ao = min(ao, maxAo);
 	vec3 result = ao * ambient * albedo;
 	fragColor = vec4(result, 1.0f);
 }

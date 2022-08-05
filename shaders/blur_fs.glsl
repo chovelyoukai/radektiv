@@ -3,6 +3,8 @@
 uniform sampler2D ssaoTex;
 uniform vec2 screenSize;
 
+#define BLUR_SIZE 2
+
 void main()
 {
 	vec2 uv;
@@ -11,13 +13,13 @@ void main()
 	vec2 texelSize = 1.0f / vec2(textureSize(ssaoTex, 0));
 	
 	float result = 0.0f;
-	for (int x = -2; x < 2; x++)
+	for (float x = -BLUR_SIZE; x < BLUR_SIZE; x++)
 	{
-		for (int y = -2; y < 2; y++)
+		for (float y = -BLUR_SIZE; y < BLUR_SIZE; y++)
 		{
-			result += texture(ssaoTex, uv + vec2(float(x), float(y))
+			result += texture(ssaoTex, uv + vec2(x, y)
 				* texelSize).r;
 		}
 	}
-	gl_FragDepth = result / 16.0f;
+	gl_FragDepth = result / (4 * BLUR_SIZE * BLUR_SIZE);
 }

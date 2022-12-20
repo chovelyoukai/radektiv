@@ -6,7 +6,7 @@
 enum LumpType
 {
 	LUMP_ENTITIES = 0,
-	LUMP_TEXTURES,
+	LUMP_MATERIALS,
 	LUMP_PLANES,
 	LUMP_NODES,
 	LUMP_LEAVES,
@@ -48,6 +48,13 @@ typedef struct
 
 typedef struct
 {
+	uint8_t name[64];
+	uint32_t flags;
+	uint32_t contents;
+} BSPMaterial;
+
+typedef struct
+{
 	float position[3];
 	float uv[2][2];
 	float normal[3];
@@ -82,7 +89,7 @@ typedef struct
 	uint8_t *raw;
 	BSPHeader *header;
 	char *entities;
-	void *textures;
+	BSPMaterial *materials;
 	void *planes;
 	void *nodes;
 	void *leaves;

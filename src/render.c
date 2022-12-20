@@ -7,6 +7,9 @@
 #include "radmath.h"
 #include "render.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 float squareVerts[] =
 {
 	 // positions        // normals
@@ -17,6 +20,12 @@ float squareVerts[] =
 	-1.0f, -1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
 	 1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
 	-1.0f,  1.0f,  0.0f, 0.0f, 0.0f, -1.0f,
+};
+
+float errTex[] =
+{
+	1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+	0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
 };
 
 bool initRenderer(Renderer *r, Stack *s)
@@ -53,7 +62,8 @@ bool initRenderer(Renderer *r, Stack *s)
 	setupGBuffer(r);
 	setupShadowBuffer(r);
 
-	r->Objects.screen = makeRenderObject(squareVerts, sizeof squareVerts);
+	r->Objects.screen = makeRenderObject(squareVerts, (sizeof squareVerts) / sizeof(float));
+	printf("%lu\n", sizeof squareVerts);
 
 	r->s = s;
 	unsigned int lvc;
@@ -62,6 +72,18 @@ bool initRenderer(Renderer *r, Stack *s)
 	float *lightNorms = readVecs("models/light.norms", &lnc, s);
 	float *lightModel = combineVecs(lightVerts, lightNorms, lvc, s);
 	r->Objects.light = makeRenderObject(lightModel, lvc + lnc);
+
+	int w, h, nChan;
+	unsigned char *data = stbi_load("textures/error.png", &w, &h, &nChan, 0);
+
+	glGenTextures(1, &(r->Tex.error));
+	glBindTexture(GL_TEXTURE_2D, r->Tex.error);
+//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_RGB, GL_FLOAT, errTex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	return true;
 }
@@ -252,8 +274,6 @@ RenderObject makeRenderObjectBSP(BSPLevel *level)
 {
 	unsigned int numVerts = level->header->lumps[LUMP_VERTS].length /
 		sizeof(BSPVert);
-//	unsigned int numIndices = level->header->lumps[LUMP_INDICES].length /
-//		sizeof(BSPIndex);
 	unsigned int numIndices = level->realIndexCount;
 
 	RenderObject ro;
@@ -328,6 +348,9 @@ void drawScene(Renderer *r, RenderObject *scene, unsigned int objects,
 	const float *viewPtr = &view[0][0];
 	glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "view"),
 		1, GL_FALSE, viewPtr);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, r->Tex.error);
 
 	for (int i = 0; i < objects; i++)
 	{

@@ -30,17 +30,27 @@ BSPLevel *loadMap(Stack *s, const char *const filename)
 	fclose(filePtr);
 
 	level->header = (BSPHeader *)(level->raw);
-	level->entities = (char *)(level->raw + level->header->lumps[LUMP_ENTITIES].offset);
-	level->verts = (BSPVert *)(level->raw + level->header->lumps[LUMP_VERTS].offset);
-	level->indices = (BSPIndex *)(level->raw + level->header->lumps[LUMP_INDICES].offset);
-	level->faces = (BSPFace *)(level->raw + level->header->lumps[LUMP_FACES].offset);
 
-	printf("num verts: %lu\n", level->header->lumps[LUMP_VERTS].length / sizeof(BSPVert));
-	printf("num indices: %lu\n", level->header->lumps[LUMP_INDICES].length / sizeof(BSPIndex));
-	printf("%s\n", level->entities);
+	BSPLump *lumps = level->header->lumps;
+
+	level->entities = (char *)(level->raw + lumps[LUMP_ENTITIES].offset);
+	level->materials = (BSPMaterial *)(level->raw + lumps[LUMP_MATERIALS].offset);
+	level->verts = (BSPVert *)(level->raw + lumps[LUMP_VERTS].offset);
+	level->indices = (BSPIndex *)(level->raw + lumps[LUMP_INDICES].offset);
+	level->faces = (BSPFace *)(level->raw + lumps[LUMP_FACES].offset);
+
+	printf("num verts: %lu\n", lumps[LUMP_VERTS].length / sizeof(BSPVert));
+	printf("num indices: %lu\n", lumps[LUMP_INDICES].length / sizeof(BSPIndex));
 
 	convertMapVerts(level);
 	getRealMapIndices(s, level);
+
+	printf("num tex: %lu\n", lumps[LUMP_MATERIALS].length / sizeof(BSPMaterial));
+
+	for (int i = 0; i < lumps[LUMP_MATERIALS].length / sizeof(BSPMaterial); i++)
+	{
+		level->materials[i].name[63] = '\0';
+	}
 
 	return level;
 }

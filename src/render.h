@@ -75,6 +75,7 @@ typedef struct
 		unsigned int ssaoNoise;
 		unsigned int ssaoBlur;
 		unsigned int shadowMap;
+		unsigned int error;
 	} Tex;
 
 	struct

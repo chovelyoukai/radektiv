@@ -448,6 +448,18 @@ void drawLights(Renderer *r, RenderObject *scene, unsigned int objects,
 	const float *viewPtr = &view[0][0];
 
 	glCullFace(GL_FRONT);
+
+	// if we aren't going to draw shadows, just set this up once
+	if (!eg.doShadows)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.shadow);
+		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+
+		glDepthMask(GL_TRUE);
+
+		glClear(GL_DEPTH_BUFFER_BIT);
+	}
+
 	for (int n = 0; n < lightCount; n++)
 	{
 		float c = lights[n].constant / 1000.0f;
@@ -459,49 +471,52 @@ void drawLights(Renderer *r, RenderObject *scene, unsigned int objects,
 			continue;
 
 		// first draw shadows
-		glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.shadow);
-		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-
-		glDepthMask(GL_TRUE);
-
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-		glEnable(GL_DEPTH_TEST);
-		glDisable(GL_BLEND);
-
-		useProg(r, r->Progs.shadow);
-
-		mat4x4 lightView[6];
-		const float *lightViewPtr = &lightView[0][0][0];
-		vec3 center;
-		vec3_add(center, lights[n].origin, (vec3){1.0f, 0.0f, 0.0f});
-		mat4x4_look_at(lightView[0], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
-		vec3_add(center, lights[n].origin, (vec3){-1.0f, 0.0f, 0.0f});
-		mat4x4_look_at(lightView[1], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
-		vec3_add(center, lights[n].origin, (vec3){0.0f, 1.0f, 0.0f});
-		mat4x4_look_at(lightView[2], lights[n].origin, center, (vec3){0.0f, 0.0f, 1.0f});
-		vec3_add(center, lights[n].origin, (vec3){0.0f, -1.0f, 0.0f});
-		mat4x4_look_at(lightView[3], lights[n].origin, center, (vec3){0.0f, 0.0f, -1.0f});
-		vec3_add(center, lights[n].origin, (vec3){0.0f, 0.0f, 1.0f});
-		mat4x4_look_at(lightView[4], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
-		vec3_add(center, lights[n].origin, (vec3){0.0f, 0.0f, -1.0f});
-		mat4x4_look_at(lightView[5], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
-
-		mat4x4 lightProj;
-		const float *lightProjPtr = &lightProj[0][0];
-		mat4x4_perspective(lightProj, M_PI / 2.0f, 1.0f, r->cam.near, r->cam.far);
-
-		glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "lightView"),
-			6, GL_FALSE, lightViewPtr);
-		glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "lightProj"),
-			1, GL_FALSE, lightProjPtr);
-		glUniform3fv(glGetUniformLocation(r->Progs.current, "lightPos"), 1,
-			lights[n].origin);
-		glUniform1f(glGetUniformLocation(r->Progs.current, "far"), r->cam.far);
-
-		for (int i = 0; i < objects; i++)
+		if (eg.doShadows)
 		{
-			drawRenderObject(r, scene[i]);
+			glBindFramebuffer(GL_FRAMEBUFFER, r->FBOs.shadow);
+			glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+
+			glDepthMask(GL_TRUE);
+
+			glClear(GL_DEPTH_BUFFER_BIT);
+
+			glEnable(GL_DEPTH_TEST);
+			glDisable(GL_BLEND);
+
+			useProg(r, r->Progs.shadow);
+
+			mat4x4 lightView[6];
+			const float *lightViewPtr = &lightView[0][0][0];
+			vec3 center;
+			vec3_add(center, lights[n].origin, (vec3){1.0f, 0.0f, 0.0f});
+			mat4x4_look_at(lightView[0], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+			vec3_add(center, lights[n].origin, (vec3){-1.0f, 0.0f, 0.0f});
+			mat4x4_look_at(lightView[1], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+			vec3_add(center, lights[n].origin, (vec3){0.0f, 1.0f, 0.0f});
+			mat4x4_look_at(lightView[2], lights[n].origin, center, (vec3){0.0f, 0.0f, 1.0f});
+			vec3_add(center, lights[n].origin, (vec3){0.0f, -1.0f, 0.0f});
+			mat4x4_look_at(lightView[3], lights[n].origin, center, (vec3){0.0f, 0.0f, -1.0f});
+			vec3_add(center, lights[n].origin, (vec3){0.0f, 0.0f, 1.0f});
+			mat4x4_look_at(lightView[4], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+			vec3_add(center, lights[n].origin, (vec3){0.0f, 0.0f, -1.0f});
+			mat4x4_look_at(lightView[5], lights[n].origin, center, (vec3){0.0f, -1.0f, 0.0f});
+
+			mat4x4 lightProj;
+			const float *lightProjPtr = &lightProj[0][0];
+			mat4x4_perspective(lightProj, M_PI / 2.0f, 1.0f, r->cam.near, r->cam.far);
+
+			glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "lightView"),
+					6, GL_FALSE, lightViewPtr);
+			glUniformMatrix4fv(glGetUniformLocation(r->Progs.current, "lightProj"),
+					1, GL_FALSE, lightProjPtr);
+			glUniform3fv(glGetUniformLocation(r->Progs.current, "lightPos"), 1,
+					lights[n].origin);
+			glUniform1f(glGetUniformLocation(r->Progs.current, "far"), r->cam.far);
+
+			for (int i = 0; i < objects; i++)
+			{
+				drawRenderObject(r, scene[i]);
+			}
 		}
 
 		// then draw lights

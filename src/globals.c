@@ -43,6 +43,7 @@ void initEnvGlobals(Stack *s)
 	eg.maxFramerate = loadEnvVarI("RAD_MAX_FRAMES", 60);
 	eg.doSSAO       = loadEnvVarI("RAD_DO_SSAO",    1);
 	eg.doLight      = loadEnvVarI("RAD_DO_LIGHT",   1);
+	eg.doShadows    = loadEnvVarI("RAD_DO_SHADOWS", 1);
 	loadEnvVarS("RAD_GAME_NAME", "Radektiv", &(eg.gameName), s);
 }
 

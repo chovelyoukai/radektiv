@@ -11,6 +11,7 @@ typedef struct
 	char *gameName;
 	int doSSAO;
 	int doLight;
+	int doShadows;
 } EnvGlobals;
 
 extern EnvGlobals eg;
